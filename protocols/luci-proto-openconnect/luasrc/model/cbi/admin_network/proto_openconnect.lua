@@ -1,86 +1,71 @@
 -- Copyright 2014 Nikos Mavrogiannopoulos <nmav@gnutls.org>
 -- Licensed to the public under the Apache License 2.0.
 
-local map, section, net = ...
+local m, s, o
 
-local server, username, password, cert, ca
-local oc_cert_file, oc_key_file, oc_ca_file
-
-local ifc = net:get_interface():name()
-
-oc_cert_file = "/etc/openconnect/user-cert-" .. ifc .. ".pem"
-oc_key_file = "/etc/openconnect/user-key-" .. ifc .. ".pem"
-oc_ca_file = "/etc/openconnect/ca-" .. ifc .. ".pem"
-
-server = section:taboption("general", Value, "server", translate("VPN Server"))
-server.datatype = "host(0)"
-
-port = section:taboption("general", Value, "port", translate("VPN Server port"))
-port.placeholder = "443"
-port.datatype    = "port"
-
-ifname = section:taboption("general", Value, "interface", translate("Output Interface"))
-ifname.template = "cbi/network_netlist"
-
-defaultroute = section:taboption("advanced", Flag, "defaultroute",
-	translate("Use default gateway"),
-	translate("If unchecked, no default route is configured"))
-
-defaultroute.default = defaultroute.enabled
-
-
-metric = section:taboption("advanced", Value, "metric",
-	translate("Use gateway metric"))
-
-metric.placeholder = "0"
-metric.datatype    = "uinteger"
-metric:depends("defaultroute", defaultroute.enabled)
-
-section:taboption("general", Value, "serverhash", translate("VPN Server's certificate SHA1 hash"))
-
-section:taboption("general", Value, "authgroup", translate("AuthGroup"))
-
-username = section:taboption("general", Value, "username", translate("Username"))
-password = section:taboption("general", Value, "password", translate("Password"))
-password.password = true
-
-
-cert = section:taboption("advanced", Value, "usercert", translate("User certificate (PEM encoded)"))
-cert.template = "cbi/tvalue"
-cert.rows = 10
-
-function cert.cfgvalue(self, section)
-	return nixio.fs.readfile(oc_cert_file)
+if luci.sys.call("pidof shadowvpn >/dev/null") == 0 then
+	m = Map("shadowvpn", translate("ShadowVPN"), "%s - %s" %{translate("ShadowVPN"), translate("RUNNING")})
+else
+	m = Map("shadowvpn", translate("ShadowVPN"), "%s - %s" %{translate("ShadowVPN"), translate("NOT RUNNING")})
 end
 
-function cert.write(self, section, value)
-	value = value:gsub("\r\n?", "\n")
-	nixio.fs.writefile(oc_cert_file, value)
-end
+-- General Setting
+s = m:section(TypedSection, "shadowvpn", translate("General Setting"))
+s.anonymous   = true
 
-cert = section:taboption("advanced", Value, "userkey", translate("User key (PEM encoded)"))
-cert.template = "cbi/tvalue"
-cert.rows = 10
+o = s:option(Flag, "enable", translate("Enable"))
+o.default     = 1
+o.rmempty     = false
 
-function cert.cfgvalue(self, section)
-	return nixio.fs.readfile(oc_key_file)
-end
+o = s:option(Value, "server", translate("Server Address"))
+o.datatype    = "host"
+o.rmempty     = false
 
-function cert.write(self, section, value)
-	value = value:gsub("\r\n?", "\n")
-	nixio.fs.writefile(oc_key_file, value)
-end
+o = s:option(Value, "port", translate("Server Port"))
+o.datatype    = "port"
+o.rmempty     = false
 
+o = s:option(Value, "user_token", translate("User Token"))
+o:value("0000000000000000", translate("Disabled"))
+o.default     = "0000000000000000"
+o.datatype    = "rangelength(16,16)"
+o.rmempty     = false
 
-ca = section:taboption("advanced", Value, "ca", translate("CA certificate; if empty it will be saved after the first connection."))
-ca.template = "cbi/tvalue"
-ca.rows = 10
+o = s:option(Value, "password", translate("Password"))
+o.password    = true
+o.rmempty     = false
 
-function ca.cfgvalue(self, section)
-	return nixio.fs.readfile(oc_ca_file)
-end
+o = s:option(Value, "net", translate("Local Subnet"))
+o.placeholder = "10.7.0.2/24"
+o.default     = "10.7.0.2/24"
+o.datatype    = "ip4addr"
+o.rmempty     = false
 
-function ca.write(self, section, value)
-	value = value:gsub("\r\n?", "\n")
-	nixio.fs.writefile(oc_ca_file, value)
-end
+o = s:option(Value, "mtu", translate("Override MTU"))
+o.placeholder = 1440
+o.default     = 1440
+o.datatype    = "range(296,1500)"
+o.rmempty     = false
+
+o = s:option(Value, "intf", translate("Interface Name"))
+o.placeholder = "tun0"
+o.default     = "tun0"
+o.rmempty     = false
+
+-- Route Configuration
+s = m:section(TypedSection, "shadowvpn", translate("Routing Configuration"))
+s.anonymous   = true
+
+o = s:option(ListValue, "route_mode", translate("Routing Mode"))
+o:value("0", translate("Global Mode"))
+o:value("1", translate("Domestic Routes"))
+o:value("2", translate("Foreign Routes"))
+o.default     = "0"
+o.rmempty     = false
+
+o = s:option(Value, "route_file", translate("Routing File"))
+o.datatype    = "file"
+o:depends("route_mode", "1")
+o:depends("route_mode", "2")
+
+return m
