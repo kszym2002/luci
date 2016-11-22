@@ -6,8 +6,8 @@
 
 include $(TOPDIR)/rules.mk
 
-LUCI_TITLE:=Support for OpenConnect VPN
-LUCI_DEPENDS:=+openconnect
+LUCI_TITLE:=shadowpvn luci
+LUCI_DEPENDS:=+shadowvpn
 
 include ../../luci.mk
 
